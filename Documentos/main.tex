@@ -1,0 +1,160 @@
+\documentclass[conference]{IEEEtran}
+
+% ---- Paquetes ----
+\usepackage[spanish,es-nodecimaldot]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{float} % <-- permite fijar figuras con [H]
+\hypersetup{colorlinks=true, urlcolor=blue, citecolor=black, linkcolor=black}
+
+% ---- Título y autores (ajusta si hace falta) ----
+\title{Reconocimiento de Sonidos Ambientales a partir de Espectrogramas con CNN}
+
+\author{
+\IEEEauthorblockN{Priscilla Jiménez Salgado}
+\IEEEauthorblockA{Escuela de Ingeniería en Computación\\
+Instituto Tecnológico de Costa Rica\\
+priscilla.jimenez@estudiante.tec.ac.cr}
+\and
+\IEEEauthorblockN{Fabián Araya Ortega}
+\IEEEauthorblockA{Escuela de Ingeniería en Computación\\
+Instituto Tecnológico de Costa Rica\\
+fabianarayaortega@estudiante.tec.ac.cr}
+\and
+\IEEEauthorblockN{David Acuña López}
+\IEEEauthorblockA{Escuela de Ingeniería en Computación\\
+Instituto Tecnológico de Costa Rica\\
+david.acuna@estudiante.tec.ac.cr}
+}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Se reporta el avance del proyecto de clasificación de sonidos ambientales con CNN a partir de espectrogramas. Este documento integra la contribución del \emph{Compañero 1} (diseño, dataset y preprocesamiento), e incluye las secciones de \emph{Compañero 2} (modelos y entrenamiento) y \emph{Compañero 3} (evaluación y documentación) marcadas como \emph{pendiente completar}. El flujo cubre: forma de onda, espectrograma lineal (STFT), espectrograma Mel y \emph{data augmentation} en la señal, además del uso de \emph{SpecAugment} durante entrenamiento.
+\end{abstract}
+
+\begin{IEEEkeywords}
+clasificación de audio, espectrograma Mel, CNN, ESC-50, data augmentation, SpecAugment, Weights \& Biases.
+\end{IEEEkeywords}
+
+% =====================================================
+\section{Objetivo}
+Aplicar redes neuronales convolucionales a la clasificación multiclase de sonidos ambientales a partir de representaciones 2D derivadas de audio (espectrogramas). En este módulo se: (i) prepara el dataset, (ii) construye el flujo de preprocesamiento (audio$\rightarrow$imagen), y (iii) diseña aumentación inspirada en audio para robustecer entrenamiento, manteniendo validación y prueba \emph{crudos} para evaluación imparcial.
+
+% =====================================================
+\section{Descripción del dataset}
+Se utiliza \textbf{ESC-50}, con 2{,}000 clips etiquetados en 50 clases (animales, ambiente interior/exterior, maquinaria, etc.), con metadatos y \emph{folds} que facilitan experimentación reproducible~\cite{piczak2015esc}. 
+
+La Figura~\ref{fig:wave} muestra la \emph{forma de onda} de un clip ejemplo; esta vista temporal permite apreciar la estructura global (silencios, picos, densidad de eventos) previa al análisis tiempo--frecuencia.
+
+% --- Forma de onda (Figura 1) ---
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{waveform_example.png}
+    \caption{Forma de onda de un clip de ESC-50 (ejemplo). Útil para inspección temporal y verificación rápida de duración/señal antes del paso a tiempo--frecuencia.}
+    \label{fig:wave}
+\end{figure}
+
+% =====================================================
+\section{Preprocesamiento de los datos }
+El preprocesamiento transforma cada clip $y(t)$ en una representación 2D apta para CNN.
+
+\subsection{Conversión audio $\rightarrow$ imagen}
+\textbf{(1) Espectrograma lineal (STFT).} Se calcula $S=\lvert\text{STFT}(y)\rvert$ y se expresa en dB (escala logarítmica) para resaltar energía en bandas de frecuencia a lo largo del tiempo (Fig.~\ref{fig:stft}). Este mapa es útil para inspección general y depuración del pipeline.
+
+% --- Espectrograma lineal STFT (Figura 2) ---
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{spectrogram_linear_example.png}
+    \caption{Espectrograma logarítmico (STFT en dB). Muestra energía por frecuencia y tiempo; útil para inspección y depuración.}
+    \label{fig:stft}
+\end{figure}
+
+\textbf{(2) Espectrograma Mel.} Se proyecta $S$ a la escala Mel (p.\,ej., 128 bandas) y se convierte a dB (Fig.~\ref{fig:mel}). La escala Mel aproxima la percepción auditiva humana, comprimiendo altas frecuencias y enfatizando rangos graves/medios, lo que suele mejorar la discriminación con CNN. Ambas representaciones se exportan como PNG sin ejes para consumo directo por la red.
+
+% --- Espectrograma Mel (Figura 3) ---
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{spectrogram_mel_example.png}
+    \caption{Espectrograma Mel (128 bandas). Aproxima la percepción humana y es estándar en clasificación de audio con CNN.}
+    \label{fig:mel}
+\end{figure}
+
+\subsection{Data augmentation (offline sobre la señal)}
+Para aumentar variabilidad y robustez antes de calcular el espectrograma Mel, se aplican transformaciones \emph{en la señal}: \emph{ruido aditivo} (baja energía), \emph{time stretching} ($\approx\pm10\%$) y \emph{pitch shifting} ($\pm1$--$2$ semitonos). El conjunto aumentado se \emph{usa sólo en entrenamiento}; validación y prueba permanecen \emph{crudos}. 
+
+La Figura~\ref{fig:comparativa} compara un Mel original vs.\ su versión aumentada, donde se conserva la \emph{estructura semántica} del patrón acústico pero con variaciones controladas que mejoran generalización.
+
+% --- Comparativa original vs aumentado (Figura 4) ---
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{comparativa_espectrogramas_from_disk.png}
+    \caption{Comparación visual: espectrograma Mel \emph{original} (izq.) vs.\ \emph{aumentado offline} (der.) a partir de transformaciones de señal (ruido/estiramiento/cambio de tono). Se preserva la identidad de clase introduciendo variabilidad útil para el aprendizaje.}
+    \label{fig:comparativa}
+\end{figure}
+
+\subsection{SpecAugment (online durante entrenamiento)}
+\emph{SpecAugment}~\cite{park2019specaugment} aplica \emph{masking} en tiempo y en frecuencia directamente sobre tensores espectrales \emph{durante} el entrenamiento (regularización estocástica por lote/época). No se \emph{hornea} en las imágenes offline para evitar sesgos fijos y mantener validación/prueba sin artificios.
+
+% =====================================================
+\section{Diseño de arquitectura (Compañero 2) \textit{-- Pendiente completar}}
+\noindent\textbf{Contenido requerido:}
+\begin{itemize}
+    \item \textbf{Modelo A (LeNet-5 adaptado):} entrada (p.\,ej., $1\times224\times224$), bloques conv/pool, activaciones y capas densas.
+    \item \textbf{Modelo B (alternativo):} arquitectura basada en literatura (ResNet/MobileNet/EfficientNet) o diseño propio fundamentado.
+    \item \textbf{Detalles:} función de pérdida, optimizador, hiperparámetros, control de aleatoriedad y reproducibilidad.
+    \item \textbf{Diagramas/tablas} de arquitectura con parámetros y tamaños de salida por capa.
+\end{itemize}
+
+% =====================================================
+\section{Entrenamiento (Compañero 2) \textit{-- Pendiente completar}}
+\noindent\textbf{Contenido requerido:}
+\begin{itemize}
+    \item \textbf{Escenarios:} A-Base, A-Aumentado, B-Base, B-Aumentado (mínimo 5 corridas por combinación).
+    \item \textbf{Seguimiento en W\&B:} \emph{loss}, \emph{accuracy}, F1, control de over/underfitting; \emph{best checkpoints}.
+    \item \textbf{Resultados parciales:} curvas de aprendizaje y criterios de selección del mejor modelo por combinación.
+\end{itemize}
+
+% =====================================================
+\section{Evaluación de modelos (Compañero 3) \textit{-- Pendiente completar}}
+\noindent\textbf{Contenido requerido:}
+\begin{itemize}
+    \item \textbf{Comparación final} entre mejores A y B (base vs.\ aumentados).
+    \item \textbf{Métricas de test:} \emph{accuracy}, F1 macro, matriz de confusión, análisis de errores.
+    \item \textbf{Tablas/figuras} comparativas y discusión de resultados.
+\end{itemize}
+
+% =====================================================
+\section{Entrega y documentación (Compañero 3) \textit{-- Pendiente completar}}
+\noindent\textbf{Contenido requerido:}
+\begin{itemize}
+    \item \textbf{Estructura .zip:} fuente LaTeX + PDF + Notebook(s) + figuras exportadas.
+    \item \textbf{Formato IEEE:} coherencia de estilo, citas y referencias; checklist final de calidad.
+    \item \textbf{Limitaciones y trabajo futuro:} líneas de mejora (más datos, regularización, \emph{fine-tuning}).
+\end{itemize}
+
+% =====================================================
+\section*{Agradecimientos}
+Se agradece el apoyo del curso y el ecosistema de software libre (Librosa, NumPy, Matplotlib, PyTorch, Scikit-learn) y las herramientas de seguimiento (Weights \& Biases).
+
+% ---- Bibliografía breve (puedes migrar a .bib) ----
+\begin{thebibliography}{00}
+
+\bibitem{piczak2015esc}
+K.~J. Piczak, ``ESC: Dataset for Environmental Sound Classification,''
+in \emph{Proceedings of the 23rd ACM International Conference on Multimedia},
+Brisbane, Australia, 2015, pp. 1015--1018. Available: \url{https://dl.acm.org/doi/10.1145/2733373.2806390}
+
+\bibitem{park2019specaugment}
+D.~S. Park, W.~Chan, Y.~Zhang, C.-C. Chiu, B.~Zoph, E.~D. Cubuk, and Q.~V. Le,
+``SpecAugment: A Simple Data Augmentation Method for Automatic Speech Recognition,''
+\emph{arXiv preprint} arXiv:1904.08779, 2019.
+
+\end{thebibliography}
+
+\end{document}
