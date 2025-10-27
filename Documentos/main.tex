@@ -121,8 +121,9 @@ La Figura~\ref{fig:comparativa} compara un Mel original vs.\ su versión aumenta
 \end{itemize}
 
 % =====================================================
-\section{Evaluación de modelos}
-Se evaluaron cuatro configuraciones experimentales: Modelo A y B, cada uno con datos crudos y aumentados, aplicando SpecAugment durante el entrenamiento cuando correspondía. La evaluación se realizó exclusivamente sobre datos crudos para garantizar una medición imparcial del rendimiento.
+\section{Evaluación de modelos (Compañero 3 - David)}
+
+Se evaluaron cuatro configuraciones experimentales: Modelo A (LeNet-5 adaptado) y Modelo B (CNN tipo VGG), cada uno entrenado con datos crudos y aumentados, aplicando SpecAugment durante el entrenamiento cuando correspondía. La evaluación se realizó exclusivamente sobre datos \emph{crudos} para garantizar una medición imparcial del rendimiento.
 
 \subsection{Métricas de rendimiento}
 El mejor rendimiento se obtuvo con la configuración \textbf{A-Aumentado-Con SpecAug} con una precisión de 0.600 en el conjunto de prueba. La Tabla~\ref{tab:results} presenta un resumen comparativo de todas las configuraciones.
@@ -162,7 +163,23 @@ Este trabajo presenta un pipeline completo para la clasificación de sonidos amb
 
 \textbf{4. Protocolo de evaluación robusto:} La evaluación exclusiva sobre datos crudos garantiza mediciones imparciales y comparables entre diferentes configuraciones experimentales.
 
-\textbf{Limitaciones y trabajo futuro:} Las limitaciones incluyen el tamaño relativamente pequeño del dataset ESC-50 y la necesidad de explorar arquitecturas más profundas. Trabajo futuro contempla la aplicación de transfer learning con modelos preentrenados y la exploración de técnicas de fine-tuning específicas para audio.
+\textbf{Rationale del protocolo experimental:} El \textbf{Conjunto 2 (aumentado)} se utiliza \emph{exclusivamente} para entrenamiento, mientras que validación y prueba siempre usan datos crudos. Esto evita fuga de información y asegura mediciones imparciales. \textbf{SpecAugment} se aplica online durante el entrenamiento como regularizador estocástico, sin modificar los datos de evaluación. Esta separación estricta es fundamental para reportar resultados científicos sólidos y reproducibles.
+
+\textbf{Limitaciones y trabajo futuro:} Las limitaciones incluyen el tamaño relativamente pequeño del dataset ESC-50 y la necesidad de explorar arquitecturas más profundas. Trabajo futuro contempla la aplicación de transfer learning con modelos preentrenados (VGG, ResNet, EfficientNet aplicados a espectrogramas), la exploración de técnicas de fine-tuning específicas para audio, y la incorporación de atención espacial-temporal en las CNN.
+
+% =====================================================
+\section*{Checklist de Integridad de Datos}
+
+Este trabajo garantiza la integridad experimental mediante los siguientes controles verificados:
+
+\begin{itemize}
+    \item \textbf{Validación y test SIEMPRE con datos crudos} (sin augmentations offline u online)
+    \item \textbf{Semillas fijas} (seed=42) para reproducibilidad de todos los experimentos
+    \item \textbf{Splits consistentes} entre todas las corridas experimentales
+    \item \textbf{No hay fuga de información} entre entrenamiento, validación y prueba
+    \item \textbf{Especificación clara:} Conjunto aumentado (offline) solo para entrenamiento; SpecAugment (online) solo durante entrenamiento
+    \item \textbf{Etiquetado correcto en W\&B:} modelo=A|B, dataset=crudo|aumentado, specaug=on|off
+\end{itemize}
 
 % =====================================================
 \section*{Agradecimientos}
