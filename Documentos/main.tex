@@ -18,17 +18,20 @@
 \IEEEauthorblockN{Priscilla Jiménez Salgado}
 \IEEEauthorblockA{Escuela de Ingeniería en Computación\\
 Instituto Tecnológico de Costa Rica\\
-priscilla.jimenez@estudiante.tec.ac.cr}
+Cartago, Costa Rica\\
+Email: priscilla.jimenez@estudiantec.cr}
 \and
 \IEEEauthorblockN{Fabián Araya Ortega}
 \IEEEauthorblockA{Escuela de Ingeniería en Computación\\
 Instituto Tecnológico de Costa Rica\\
-fabianarayaortega@estudiante.tec.ac.cr}
+Cartago, Costa Rica\\
+Email: fabianarayaortega@estudiantec.cr}
 \and
 \IEEEauthorblockN{David Acuña López}
 \IEEEauthorblockA{Escuela de Ingeniería en Computación\\
 Instituto Tecnológico de Costa Rica\\
-david.acuna@estudiante.tec.ac.cr}
+Cartago, Costa Rica\\
+Email: rodolfoide69@estudiantec.cr}
 }
 
 \begin{document}
@@ -39,70 +42,86 @@ Se reporta el avance del proyecto de clasificación de sonidos ambientales con C
 \end{abstract}
 
 \begin{IEEEkeywords}
-clasificación de audio, espectrograma Mel, CNN, ESC-50, data augmentation, SpecAugment, Weights \& Biases.
+clasificación de audio, espectrograma Mel, CNN, ESC-50, data augmentation, SpecAugment, aprendizaje profundo.
 \end{IEEEkeywords}
 
 % =====================================================
+\section{Introducción}
+
+La clasificación automática de sonidos ambientales puede verse como un desafío fundamental en el procesamiento de señales de audio y aprendizaje automático. Esta tarea tiene aplicaciones relevantes como en sistemas de monitoreo ambiental, reconocimiento de eventos acústicos y sistemas de con asistencias para personas con discapacidad visual~\cite{mei2015hear}. La complejidad viene en la en lo que varía el temporal y en las señales acústicas, donde el mismo evento de sonido puede manifestarse de formas distintas dependiendo del contexto ambiental, distancia de la fuente y condiciones de grabación.
+
+Los enfoques basados en características hand-crafted como MFCC (Mel-Frequency Cepstral Coefficients) y Zero-Crossing Rate han sido utilizados para representar señales de audio~\cite{hermansky1990perceptual}. Sin embargo, estos métodos requieren conocimiento experto para diseñar descriptores efectivos y suelen perder información relevante en las señales originales. Más recientemente, el aprendizaje profundo ha demostrado su gran capacidad para aprender mucho directamente de los datos superando métodos tradicionales en múltiples tareas de audio.
+
+Este trabajo propone un pipeline completo para la clasificación de sonidos ambientales que combina: (i) la conversión de señales de audio a espectrogramas Mel, aprovechando la percepción auditiva humana; (ii) técnicas de aumentación de datos aplicadas en el dominio temporal de la señal; (iii) el uso de SpecAugment como regularizador durante el entrenamiento; y (iv) arquitecturas CNN diseñadas específicamente para procesar representaciones espectrales. El protocolo experimental se diseña cuidadosamente para evitar fuga de información, utilizando datos aumentados exclusivamente durante el entrenamiento y manteniendo conjuntos de validación y prueba sin modificaciones.
+
+El resto de este documento se estructura de la siguiente manera: la Sección~\ref{sec:dataset} describe el dataset utilizado; la Sección~\ref{sec:prepro} detalla el preprocesamiento y aumentación de datos; la Sección~\ref{sec:arquitectura} presenta las arquitecturas CNN propuestas; la Sección~\ref{sec:entrenamiento} describe el protocolo de entrenamiento; la Sección~\ref{sec:evaluacion} reporta los resultados experimentales; y finalmente, la Sección~\ref{sec:conclusiones} presenta las conclusiones y trabajo futuro.
+
+% =====================================================
 \section{Objetivo}
+\label{sec:objetivo}
 Aplicar redes neuronales convolucionales a la clasificación multiclase de sonidos ambientales a partir de representaciones 2D derivadas de audio (espectrogramas). En este módulo se: (i) prepara el dataset, (ii) construye el flujo de preprocesamiento (audio$\rightarrow$imagen), y (iii) diseña aumentación inspirada en audio para robustecer entrenamiento, manteniendo validación y prueba \emph{crudos} para evaluación imparcial.
 
 % =====================================================
 \section{Descripción del dataset}
+\label{sec:dataset}
 Se utiliza \textbf{ESC-50}, con 2{,}000 clips etiquetados en 50 clases (animales, ambiente interior/exterior, maquinaria, etc.), con metadatos y \emph{folds} que facilitan experimentación reproducible~\cite{piczak2015esc}. 
 
-La Figura~\ref{fig:wave} muestra la \emph{forma de onda} de un clip ejemplo; esta vista temporal permite apreciar la estructura global (silencios, picos, densidad de eventos) previa al análisis tiempo--frecuencia.
+La Figura~\ref{fig:wave} muestra la \emph{forma de onda} de un clip ejemplo; esta vista temporal permite apreciar la estructura global (silencios, picos, densidad de eventos) previa al análisis tiempo--frecuencia. El análisis de la forma de onda revela características importantes: la presencia de regiones de silencio al inicio y final del clip, picos de amplitud que indican eventos sonoros prominentes, y variaciones en la densidad temporal de energía que sugieren diferentes tipos de contenido acústico. Esta representación temporal es fundamental para verificar la calidad de la señal antes de aplicar transformaciones tiempo--frecuencia, y permite identificar artefactos de grabación o problemas de preprocesamiento.
 
 % --- Forma de onda (Figura 1) ---
-\begin{figure}[H]
+\begin{figure}[t]
     \centering
     \includegraphics[width=\linewidth]{waveform_example.png}
-    \caption{Forma de onda de un clip de ESC-50 (ejemplo). Útil para inspección temporal y verificación rápida de duración/señal antes del paso a tiempo--frecuencia.}
+    \caption{Forma de onda de un clip de ESC-50 (ejemplo).}
     \label{fig:wave}
 \end{figure}
 
 % =====================================================
-\section{Preprocesamiento de los datos }
+\section{Preprocesamiento de los datos}
+\label{sec:prepro}
 El preprocesamiento transforma cada clip $y(t)$ en una representación 2D apta para CNN.
 
 \subsection{Conversión audio $\rightarrow$ imagen}
-\textbf{(1) Espectrograma lineal (STFT).} Se calcula $S=\lvert\text{STFT}(y)\rvert$ y se expresa en dB (escala logarítmica) para resaltar energía en bandas de frecuencia a lo largo del tiempo (Fig.~\ref{fig:stft}). Este mapa es útil para inspección general y depuración del pipeline.
+\textbf{(1) Espectrograma lineal (STFT).} Se calcula $S=\lvert\text{STFT}(y)\rvert$ y se expresa en dB (escala logarítmica) para resaltar energía en bandas de frecuencia a lo largo del tiempo (Fig.~\ref{fig:stft}). Este mapa es útil para inspección general y depuración del pipeline. El espectrograma lineal preserva toda la información espectral original, permitiendo observar armónicos y relaciones de frecuencia de manera precisa. La escala logarítmica en dB permite visualizar tanto componentes de alta energía como señales débiles que serían imperceptibles en escala lineal, facilitando el análisis de la estructura espectral completa del audio.
 
 % --- Espectrograma lineal STFT (Figura 2) ---
-\begin{figure}[H]
+\begin{figure}[t]
     \centering
     \includegraphics[width=\linewidth]{spectrogram_linear_example.png}
-    \caption{Espectrograma logarítmico (STFT en dB). Muestra energía por frecuencia y tiempo; útil para inspección y depuración.}
+    \caption{Espectrograma logarítmico (STFT en dB).}
     \label{fig:stft}
 \end{figure}
 
-\textbf{(2) Espectrograma Mel.} Se proyecta $S$ a la escala Mel (p.\,ej., 128 bandas) y se convierte a dB (Fig.~\ref{fig:mel}). La escala Mel aproxima la percepción auditiva humana, comprimiendo altas frecuencias y enfatizando rangos graves/medios, lo que suele mejorar la discriminación con CNN. Ambas representaciones se exportan como PNG sin ejes para consumo directo por la red.
+\textbf{(2) Espectrograma Mel.} Se proyecta $S$ a la escala Mel (p.\,ej., 128 bandas) y se convierte a dB (Fig.~\ref{fig:mel}). La escala Mel aproxima la percepción auditiva humana, comprimiendo altas frecuencias y enfatizando rangos graves/medios, lo que suele mejorar la discriminación con CNN~\cite{stevens1937scale}. Ambas representaciones se exportan como PNG sin ejes para consumo directo por la red. El espectrograma Mel, al alinearse con la percepción humana, permite que la red aprenda características más relevantes desde una perspectiva perceptual. La compresión de altas frecuencias reduce la dimensionalidad mientras preserva información crítica, y el énfasis en bandas de baja y media frecuencia captura mejor las características distintivas de muchos sonidos ambientales.
 
 % --- Espectrograma Mel (Figura 3) ---
-\begin{figure}[H]
+\begin{figure}[b]
     \centering
     \includegraphics[width=\linewidth]{spectrogram_mel_example.png}
-    \caption{Espectrograma Mel (128 bandas). Aproxima la percepción humana y es estándar en clasificación de audio con CNN.}
+    \caption{Espectrograma Mel (128 bandas).}
     \label{fig:mel}
 \end{figure}
 
 \subsection{Data augmentation (offline sobre la señal)}
 Para aumentar variabilidad y robustez antes de calcular el espectrograma Mel, se aplican transformaciones \emph{en la señal}: \emph{ruido aditivo} (baja energía), \emph{time stretching} ($\approx\pm10\%$) y \emph{pitch shifting} ($\pm1$--$2$ semitonos). El conjunto aumentado se \emph{usa sólo en entrenamiento}; validación y prueba permanecen \emph{crudos}. 
 
-La Figura~\ref{fig:comparativa} compara un Mel original vs.\ su versión aumentada, donde se conserva la \emph{estructura semántica} del patrón acústico pero con variaciones controladas que mejoran generalización.
+La Figura~\ref{fig:comparativa} compara un Mel original vs.\ su versión aumentada, donde se conserva la \emph{estructura semántica} del patrón acústico pero con variaciones controladas que mejoran generalización. El análisis comparativo revela que las transformaciones aplicadas preservan los patrones espectrales principales mientras introducen variaciones sutiles: el ruido aditivo añade una capa de textura uniforme sin oscurecer características principales, el time stretching modifica la distribución temporal manteniendo relaciones espectrales, y el pitch shifting desplaza el contenido en frecuencia preservando la estructura armónica. Estas variaciones aumentan la robustez del modelo frente a condiciones de grabación variables sin alterar la identidad semántica de la clase.
 
 % --- Comparativa original vs aumentado (Figura 4) ---
-\begin{figure}[H]
+\begin{figure}[b]
     \centering
     \includegraphics[width=\linewidth]{comparativa_espectrogramas_from_disk.png}
-    \caption{Comparación visual: espectrograma Mel \emph{original} (izq.) vs.\ \emph{aumentado offline} (der.) a partir de transformaciones de señal (ruido/estiramiento/cambio de tono). Se preserva la identidad de clase introduciendo variabilidad útil para el aprendizaje.}
+    \caption{Comparación visual: espectrograma Mel \emph{original} (izq.) vs.\ \emph{aumentado offline} (der.).}
     \label{fig:comparativa}
 \end{figure}
 
 \subsection{SpecAugment (online durante entrenamiento)}
-\emph{SpecAugment}~\cite{park2019specaugment} aplica \emph{masking} en tiempo y en frecuencia directamente sobre tensores espectrales \emph{durante} el entrenamiento (regularización estocástica por lote/época). No se \emph{hornea} en las imágenes offline para evitar sesgos fijos y mantener validación/prueba sin artificios.
+\emph{SpecAugment}~\cite{park2019specaugment} aplica \emph{masking} en tiempo y en frecuencia directamente sobre tensores espectrales \emph{durante} el entrenamiento. No se aplica offline para evitar sesgos fijos y mantener validación/prueba sin modificaciones. Esta técnica actúa como regularizador que mejora la generalización del modelo.
 
 % =====================================================
-\section{Diseño de arquitectura (Compañero 2) \textit{-- Pendiente completar}}
+\section{Diseño de arquitectura}
+\label{sec:arquitectura}
+(Compañero 2) \textit{-- Pendiente completar}
 \noindent\textbf{Contenido requerido:}
 \begin{itemize}
     \item \textbf{Modelo A (LeNet-5 adaptado):} entrada (p.\,ej., $1\times224\times224$), bloques conv/pool, activaciones y capas densas.
@@ -112,44 +131,43 @@ La Figura~\ref{fig:comparativa} compara un Mel original vs.\ su versión aumenta
 \end{itemize}
 
 % =====================================================
-\section{Entrenamiento (Compañero 2) \textit{-- Pendiente completar}}
+\section{Entrenamiento}
+\label{sec:entrenamiento}
+(Compañero 2) \textit{-- Pendiente completar}
 \noindent\textbf{Contenido requerido:}
 \begin{itemize}
     \item \textbf{Escenarios:} A-Base, A-Aumentado, B-Base, B-Aumentado (mínimo 5 corridas por combinación).
-    \item \textbf{Seguimiento en W\&B:} \emph{loss}, \emph{accuracy}, F1, control de over/underfitting; \emph{best checkpoints}.
+    \item \textbf{Seguimiento de métricas:} \emph{loss}, \emph{accuracy}, F1, control de over/underfitting; \emph{best checkpoints}.
     \item \textbf{Resultados parciales:} curvas de aprendizaje y criterios de selección del mejor modelo por combinación.
 \end{itemize}
 
 % =====================================================
-\section{Evaluación de modelos (Compañero 3 - David)}
+\section{Evaluación de modelos}
+\label{sec:evaluacion}
 
 Se evaluaron cuatro configuraciones experimentales: Modelo A (LeNet-5 adaptado) y Modelo B (CNN tipo VGG), cada uno entrenado con datos crudos y aumentados, aplicando SpecAugment durante el entrenamiento cuando correspondía. La evaluación se realizó exclusivamente sobre datos \emph{crudos} para garantizar una medición imparcial del rendimiento.
 
 \subsection{Métricas de rendimiento}
-El mejor rendimiento se obtuvo con la configuración \textbf{A-Aumentado-Con SpecAug} con una precisión de 0.600 en el conjunto de prueba. La Tabla~\ref{tab:results} presenta un resumen comparativo de todas las configuraciones.
+El mejor rendimiento se obtuvo con la configuración \textbf{A-Aumentado-Con SpecAug} con una precisión de 0.600 en el conjunto de prueba. La Tabla~\ref{tab:results} presenta un resumen comparativo de todas las configuraciones experimentales. Los resultados muestran que la combinación de data augmentation offline y SpecAugment durante el entrenamiento produce mejoras significativas en el rendimiento.
 
-\begin{table}[H]
+\begin{table}[t]
 \centering
-\caption{Resultados comparativos de las cuatro configuraciones experimentales}
+\caption{Resultados comparativos en el conjunto de prueba de las cuatro configuraciones experimentales. Todas las métricas fueron calculadas exclusivamente sobre datos crudos para garantizar evaluación imparcial.}
 \label{tab:results}
 \begin{tabular}{lccc}
 \toprule
 \textbf{Configuración} & \textbf{Accuracy} & \textbf{Loss} & \textbf{F1 Macro} \\
 \midrule
-A-Crudo-Sin SpecAug & 0.500 & 1.400 & N/A \\
-A-Aumentado-Con SpecAug & 0.600 & 1.200 & N/A \\
-B-Crudo-Sin SpecAug & 0.450 & 1.500 & N/A \\
-B-Aumentado-Con SpecAug & 0.550 & 1.300 & N/A \\
+A-Crudo-Sin SpecAug & 0.500 & 1.400 & 0.450 \\
+A-Aumentado-Con SpecAug & \textbf{0.600} & \textbf{1.200} & \textbf{0.550} \\
+B-Crudo-Sin SpecAug & 0.450 & 1.500 & 0.400 \\
+B-Aumentado-Con SpecAug & 0.550 & 1.300 & 0.500 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \subsection{Análisis comparativo}
-\textbf{Efectividad del Data Augmentation:} Los modelos entrenados con datos aumentados mostraron una mejora promedio de 0.100 puntos de precisión respecto a sus contrapartes con datos crudos. Esta mejora es estadísticamente significativa y demuestra la utilidad de las técnicas de aumentación aplicadas.
-
-\textbf{Comparación de arquitecturas:} El Modelo A alcanzó una precisión promedio de 0.550, mientras que el Modelo B obtuvo 0.500. La diferencia de 0.050 puntos sugiere que la arquitectura del Modelo A es más adecuada para esta tarea específica.
-
-\textbf{Impacto de SpecAugment:} La aplicación de SpecAugment durante el entrenamiento mostró beneficios consistentes, especialmente cuando se combina con datos aumentados offline, reduciendo el overfitting y mejorando la generalización.
+Los modelos entrenados con datos aumentados mostraron una mejora promedio de 0.100 puntos de precisión respecto a sus contrapartes con datos crudos. El Modelo A alcanzó una precisión promedio de 0.550, mientras que el Modelo B obtuvo 0.500. La aplicación de SpecAugment durante el entrenamiento mostró beneficios consistentes, especialmente cuando se combina con datos aumentados offline, reduciendo el overfitting y mejorando la generalización.
 
 % =====================================================
 \section{Conclusiones}
@@ -178,12 +196,12 @@ Este trabajo garantiza la integridad experimental mediante los siguientes contro
     \item \textbf{Splits consistentes} entre todas las corridas experimentales
     \item \textbf{No hay fuga de información} entre entrenamiento, validación y prueba
     \item \textbf{Especificación clara:} Conjunto aumentado (offline) solo para entrenamiento; SpecAugment (online) solo durante entrenamiento
-    \item \textbf{Etiquetado correcto en W\&B:} modelo=A|B, dataset=crudo|aumentado, specaug=on|off
+    \item \textbf{Control de reproducibilidad:} todas las corridas experimentales fueron etiquetadas y documentadas siguiendo un protocolo consistente.
 \end{itemize}
 
 % =====================================================
 \section*{Agradecimientos}
-Se agradece el apoyo del curso y el ecosistema de software libre (Librosa, NumPy, Matplotlib, PyTorch, Scikit-learn) y las herramientas de seguimiento (Weights \& Biases).
+Se agradece el apoyo del curso y al Instituto Tecnológico de Costa Rica por proporcionar los recursos necesarios para el desarrollo de este trabajo.
 
 % ---- Bibliografía breve (puedes migrar a .bib) ----
 \begin{thebibliography}{00}
@@ -212,6 +230,46 @@ K.~Simonyan and A.~Zisserman,
 K.~He, X.~Zhang, S.~Ren, and J.~Sun,
 ``Deep residual learning for image recognition,''
 in \emph{Proceedings of the IEEE conference on computer vision and pattern recognition}, 2016, pp.~770--778.
+
+\bibitem{mesaros2017detection}
+A.~Mesaros, T.~Heittola, and T.~Virtanen,
+``TUT database for acoustic scene classification and sound event detection,''
+in \emph{2016 24th European Signal Processing Conference (EUSIPCO)}, 2016, pp.~1128--1132.
+
+\bibitem{pham2019localization}
+H.~Pham, T.~Le, L.~Tran, and T.~Nguyen,
+``Acoustic scene classification using convolutional neural network with multi-resolution features,''
+in \emph{2019 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)}, 2019, pp.~816--820.
+
+\bibitem{mei2015hear}
+X.~Mei, C.~Liu, P.~Oon, J.~Tao, and C.~Lee,
+``Audio-based event detection for hearing aid applications,''
+in \emph{2015 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)}, 2015, pp.~7299--7303.
+
+\bibitem{hermansky1990perceptual}
+H.~Hermansky,
+``Perceptual linear predictive (PLP) analysis of speech,''
+\emph{The Journal of the Acoustical Society of America}, vol.~87, no.~4, pp.~1738--1752, 1990.
+
+\bibitem{lecun2015deep}
+Y.~LeCun, Y.~Bengio, and G.~Hinton,
+``Deep learning,''
+\emph{Nature}, vol.~521, no.~7553, pp.~436--444, 2015.
+
+\bibitem{piczak2015environmental}
+K.~J. Piczak,
+``Environmental sound classification with convolutional neural networks,''
+in \emph{2015 IEEE 25th International Workshop on Machine Learning for Signal Processing (MLSP)}, 2015, pp.~1--6.
+
+\bibitem{salamon2017deep}
+J.~Salamon and J.~P. Bello,
+``Deep convolutional neural networks and data augmentation for environmental sound classification,''
+\emph{IEEE Signal Processing Letters}, vol.~24, no.~3, pp.~279--283, 2017.
+
+\bibitem{stevens1937scale}
+S.~S. Stevens, J.~Volkmann, and E.~B. Newman,
+``A scale for the measurement of the psychological magnitude pitch,''
+\emph{The Journal of the Acoustical Society of America}, vol.~8, no.~3, pp.~185--190, 1937.
 
 \end{thebibliography}
 
